@@ -1,0 +1,56 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Esta plantilla de CloudFormation despliega un Listener para un Application Load Balancer.
+
+Parameters:
+  pElbArn:
+    Description: ARN del ELB al que se asociará el listener
+    Type: String
+  pPort:
+    Description: Puerto en el que el listener escuchará el tráfico
+    Type: String
+    Default: 80
+  pProtocol:
+    Description: Protocolo que el listener usará para escuchar el tráfico
+    Type: String
+    Default: HTTP
+  pSslPolicy:
+    Description: Política SSL que el listener usará para las conexiones seguras (solo se aplica si pProtocol es "HTTPS" o "TLS")
+    Type: String
+    Default: "ELBSecurityPolicy-TLS13-1-2-Res-2021-06"
+  pCertificateArn:
+    Description: ARN del certificado a asociar al listener (solo se aplica si pProtocol es "HTTPS" o "TLS")
+    Type: String
+    Default: ""
+
+Conditions:
+  cApplySslPolicy: !Or
+    - !Equals [!Ref pProtocol, "HTTPS"]
+    - !Equals [!Ref pProtocol, "TLS"]
+
+Resources:
+  rListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref pElbArn
+      Port: !Ref pPort
+      Protocol: !Ref pProtocol
+      SslPolicy: !If
+       - cApplySslPolicy
+       - !Ref pSslPolicy
+       - !Ref AWS::NoValue
+      Certificates: !If
+        - cApplySslPolicy
+        - 
+          - CertificateArn: !Ref pCertificateArn
+        - !Ref AWS::NoValue
+      DefaultActions:   
+        - Type: "fixed-response"
+          FixedResponseConfig: 
+            ContentType: "text/plain"
+            MessageBody: "Invalid path"
+            StatusCode: "404"
+
+Outputs:
+  oListenerArn:
+    Description: ARN del listener creado
+    Value: !GetAtt rListener.ListenerArn

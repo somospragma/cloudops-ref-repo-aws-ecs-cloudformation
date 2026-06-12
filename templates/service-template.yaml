@@ -1,0 +1,123 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Esta plantilla que despliega un servicio de ECS.
+
+Parameters:
+  pCustomerName:
+    Description: Nombre del cliente
+    Type: String
+  pProjectName:
+    Description: Nombre del proyecto 
+    Type: String
+  pEnvironment:
+    Description: Ambiente del despliegue
+    Type: String
+    AllowedValues: [qa, dev, pdn, prepdn]
+  pApplication:
+    Description: Aplicacion, servicio o funcionalidad del negocio
+    Type: String
+  pCostCenter:
+    Description: Centro de costos que pertenece este recurso
+    Type: String
+  pOwner:
+    Description: Nombre de la persona encargada del proyecto
+    Type: String
+  pArea:
+    Description: Nombre del area
+    Type: String
+  pCluster:
+    Description: ARN o nombre del clúster de ECS donde se desplegará el servicio
+    Type: String
+  pTaskDefinitionArn:
+    Description: ARN de la definición de tarea de ECS que se usará para el servicio
+    Type: String
+  pContainerName:
+    Description: Nombre del contenedor en la definición de tarea que se usará para el servicio
+    Type: String
+  pContainerPort:
+    Description: Puerto del contenedor que se usará para el servicio
+    Type: String
+  pTargetGroupArn:
+    Description: ARN del grupo de destino de Elastic Load Balancing para el servicio
+    Type: String
+  pIdSecurityGroups:
+    Description: Id de los security groups que protegeran el servicio
+    Type: CommaDelimitedList
+  pIdSubnets:
+    Description: Id de las subnets en donde se desplegaran las tasks
+    Type: CommaDelimitedList
+  pServiceName:
+    Description: Nombre del servicio de ECS
+    Type: String
+    Default: ""
+  pDesiredCount:
+    Description: Número deseado de instancias de tarea para el servicio
+    Type: String
+    Default: "1"
+  pHealthCheckGracePeriodSeconds:
+    Description: Período de gracia para la verificación de estado del servicio en segundos (por ejemplo, 60)
+    Type: String
+    Default: "60"
+  pLaunchType:
+    Description: Tipo de lanzamiento para el servicio de ECS (EC2, FARGATE o EXTERNAL)
+    Type: String
+    Default: "FARGATE"
+  pMinimumHealthyPercent:
+    Description: Porcentaje mínimo de tareas que deben mantenerse saludables durante un deployment
+    Type: String
+    Default: "100"
+  pCircuitBreakerEnable:
+    Description: Habilita el circuit breaker para el servicio ECS
+    Type: String
+    Default: "false"
+  pCircuitBreakerRollback:
+    Description: Habilita el rollback del circuit breaker para el servicio ECS
+    Type: String
+    Default: "false"
+  pAssignPublicIp:
+    Description: asignar una ip publica al servicio
+    Type: String
+    Default: "DISABLED"
+
+Resources:
+  rEcsService:
+    Type: AWS::ECS::Service
+    Properties:
+      ServiceName: !Sub "${pCustomerName}-${pProjectName}-${pEnvironment}-service-${pApplication}"
+      Cluster: !Ref pCluster
+      TaskDefinition: !Ref pTaskDefinitionArn
+      DesiredCount: !Ref pDesiredCount
+      HealthCheckGracePeriodSeconds: !Ref pHealthCheckGracePeriodSeconds
+      LaunchType: !Ref pLaunchType
+      LoadBalancers: 
+        - ContainerName: !Ref pContainerName
+          ContainerPort: !Ref pContainerPort
+          TargetGroupArn: !Ref pTargetGroupArn
+      NetworkConfiguration: 
+        AwsvpcConfiguration:
+          AssignPublicIp: !Ref pAssignPublicIp
+          SecurityGroups: !Ref pIdSecurityGroups
+          Subnets: !Ref pIdSubnets
+      DeploymentConfiguration: 
+        MinimumHealthyPercent: !Ref pMinimumHealthyPercent
+        DeploymentCircuitBreaker:
+          Enable: !Ref pCircuitBreakerEnable
+          Rollback: !Ref pCircuitBreakerRollback
+
+      Tags: 
+        - Key: environment
+          Value: !Ref pEnvironment
+        - Key: project-name
+          Value: !Ref pProjectName
+        - Key: cost-center
+          Value: !Ref pCostCenter
+        - Key: owner
+          Value: !Ref pOwner
+        - Key: area
+          Value: !Ref pArea
+Outputs:
+  oEcsServiceName:
+    Description: Nombre del servicio de ECS
+    Value: !GetAtt rEcsService.Name
+  oEcsServiceArn:
+    Description: ARN del servicio de ECS creado
+    Value: !GetAtt rEcsService.ServiceArn

@@ -1,0 +1,258 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Esta plantilla de CloudFormation despliega un servicio ECS Fargate con Application Load Balancer, Target Group, Security Groups, roles IAM y configuración de logging en CloudWatch.
+
+Parameters:
+  pBucketCfTemplates:
+    Description: Nombre del bucket donde se encuentran las plantillas de CloudFormation
+    Type: String
+  pBucketCfTemplatesPrefix:
+    Description: Prefijo del bucket donde se encuentran las plantillas de CloudFormation
+    Type: String
+  pCustomerName:
+    Description: Nombre del cliente
+    Type: String
+  pProjectName:
+    Description: Nombre del proyecto 
+    Type: String
+  pEnvironment:
+    Description: Ambiente del despliegue
+    Type: String
+    AllowedValues: [qa, dev, pdn, prepdn]
+  pApplication:
+    Description: Aplicacion, servicio o funcionalidad del negocio
+    Type: String
+  pCostCenter:
+    Description: Centro de costos que pertenece este recurso
+    Type: String
+  pOwner:
+    Description: Nombre de la persona encargada del proyecto
+    Type: String
+  pArea:
+    Description: Nombre del area
+    Type: String
+  pVpcId:
+    Description: ID de la VPC
+    Type: String
+  pApplicationPort:
+    Description: puerto por el que responde la app
+    Type: String
+  pIdSubnets:
+    Description: IDs de las subnets a las que se asociará el Load Balancer (separados por comas)
+    Type: CommaDelimitedList
+
+Resources:
+  rTargetGroup:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub "https://${pBucketCfTemplates}.s3.${AWS::Region}.amazonaws.com/${pBucketCfTemplatesPrefix}/elb-target-group.yaml"
+      Parameters:
+        pCustomerName: !Ref pCustomerName
+        pProjectName: !Ref pProjectName
+        pEnvironment: !Ref pEnvironment
+        pApplication: !Ref pApplication
+        pCostCenter: !Ref pCostCenter
+        pOwner: !Ref pOwner
+        pArea: !Ref pArea
+
+        pVpcId: !Ref pVpcId
+        pPort: !Ref pApplicationPort
+        pProtocol: HTTP
+        pTargetType: ip
+        pHealthCheckIntervalSeconds: 30
+        pHealthCheckPath: /
+        pHealthCheckPort: traffic-port
+        pHealthCheckProtocol: HTTP
+        pHealthCheckTimeoutSeconds: 5
+        pHealthyThresholdCount: 2
+        pUnhealthyThresholdCount: 2
+
+  rListenerRule:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub "https://${pBucketCfTemplates}.s3.${AWS::Region}.amazonaws.com/${pBucketCfTemplatesPrefix}/elb-listener-rule-template.yaml"
+      Parameters:
+        pListenerArn: 
+          Fn::ImportValue:
+            !Sub "${pCustomerName}-${pProjectName}-${pEnvironment}-oAlbListenerArn"
+        pPriority: "1"
+        pTargetGroupArn: !GetAtt rTargetGroup.Outputs.oTargetGroupArn
+        pPaths: "/*"
+
+  rLogGroup:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub "https://${pBucketCfTemplates}.s3.${AWS::Region}.amazonaws.com/${pBucketCfTemplatesPrefix}/log-group-template.yaml"
+      Parameters:
+        pCustomerName: !Ref pCustomerName
+        pProjectName: !Ref pProjectName
+        pEnvironment: !Ref pEnvironment
+        pApplication: !Ref pApplication
+        pCostCenter: !Ref pCostCenter
+        pOwner: !Ref pOwner
+        pArea: !Ref pArea
+
+  rSgEcs:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub "https://${pBucketCfTemplates}.s3.${AWS::Region}.amazonaws.com/${pBucketCfTemplatesPrefix}/sg-template.yaml"
+      Parameters:
+        pCustomerName: !Ref pCustomerName
+        pProjectName: !Ref pProjectName
+        pEnvironment: !Ref pEnvironment
+        pApplication: !Ref pApplication
+        pCostCenter: !Ref pCostCenter
+        pOwner: !Ref pOwner
+        pArea: !Ref pArea
+
+        pVpcId: !Ref pVpcId
+        pSgDescription: !Sub "Security Group para el ECS Fargate service ${pCustomerName}-${pProjectName}-${pEnvironment}-service-${pApplication} en el ambiente ${pEnvironment}"
+  rSgEcsIngress:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub "https://${pBucketCfTemplates}.s3.${AWS::Region}.amazonaws.com/${pBucketCfTemplatesPrefix}/sg-ingress-rule-template.yaml"
+      Parameters:
+        pSgId: !GetAtt rSgEcs.Outputs.oSgId
+        pSgRuleDescription: "Regla para permitir el trafico al service"
+        pFromPort: !Ref pApplicationPort
+        pToPort: !Ref pApplicationPort
+        pIpProtocol: "tcp"
+        pSourceType: "sg"
+        pSourceValue:
+          Fn::ImportValue:
+            !Sub "${pCustomerName}-${pProjectName}-${pEnvironment}-oSgAlbId"
+
+  rExecutionRole:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub "https://${pBucketCfTemplates}.s3.${AWS::Region}.amazonaws.com/${pBucketCfTemplatesPrefix}/role-template.yaml"
+      Parameters:
+        pCustomerName: !Ref pCustomerName
+        pProjectName: !Ref pProjectName
+        pEnvironment: !Ref pEnvironment
+        pApplication: !Sub "execution-${pApplication}"
+        pCostCenter: !Ref pCostCenter
+        pOwner: !Ref pOwner
+        pArea: !Ref pArea
+
+        pIamDescription: !Sub "Role de Ejecución para el ECS Fargate service ${pCustomerName}-${pProjectName}-${pEnvironment}-service-${pApplication} en el ambiente ${pEnvironment}"
+        pIamAssumeRolePolicyDocument: >-
+          {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Effect": "Allow",
+                "Principal": {
+                  "Service": "ecs-tasks.amazonaws.com"
+                },
+                "Action": "sts:AssumeRole"
+              }
+            ]
+          }
+  rExecutionPolicy:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub "https://${pBucketCfTemplates}.s3.${AWS::Region}.amazonaws.com/${pBucketCfTemplatesPrefix}/role-policy-template.yaml"
+      Parameters:
+        pCustomerName: !Ref pCustomerName
+        pProjectName: !Ref pProjectName
+        pEnvironment: !Ref pEnvironment
+        pApplication: !Sub "execution-${pApplication}"
+        pRoleName: !GetAtt rExecutionRole.Outputs.oIamRoleName
+        pPolicyEffect: "Allow"
+        pPolicyAction: >-
+          ecr:GetAuthorizationToken,
+          ecr:BatchCheckLayerAvailability,
+          ecr:GetDownloadUrlForLayer,
+          ecr:BatchGetImage,
+          logs:CreateLogStream,
+          logs:PutLogEvents
+        pPolicyResource: "*"
+  rExecutionSsmPolicy:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub "https://${pBucketCfTemplates}.s3.${AWS::Region}.amazonaws.com/${pBucketCfTemplatesPrefix}/role-policy-template.yaml"
+      Parameters:
+        pCustomerName: !Ref pCustomerName
+        pProjectName: !Ref pProjectName
+        pEnvironment: !Ref pEnvironment
+        pApplication: !Sub "execution-ssm-${pApplication}"
+        pRoleName: !GetAtt rExecutionRole.Outputs.oIamRoleName
+        pPolicyEffect: Allow
+        pPolicyAction: >-
+          ssm:StartSession,
+          ssm:DescribeSessions,
+          ssm:TerminateSession,
+          ecs:ExecuteCommand
+        pPolicyResource: "*"
+
+  rTaskRole:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub "https://${pBucketCfTemplates}.s3.${AWS::Region}.amazonaws.com/${pBucketCfTemplatesPrefix}/role-template.yaml"
+      Parameters:
+        pCustomerName: !Ref pCustomerName
+        pProjectName: !Ref pProjectName
+        pEnvironment: !Ref pEnvironment
+        pApplication: !Sub "task-${pApplication}"
+        pCostCenter: !Ref pCostCenter
+        pOwner: !Ref pOwner
+        pArea: !Ref pArea
+
+        pIamDescription: !Sub "Role de Tarea para el ECS Fargate service ${pCustomerName}-${pProjectName}-${pEnvironment}-service-${pApplication} en el ambiente ${pEnvironment}"
+        pIamAssumeRolePolicyDocument: >-
+          {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Effect": "Allow",
+                "Principal": {
+                  "Service": "ecs-tasks.amazonaws.com"
+                },
+                "Action": "sts:AssumeRole"
+              }
+            ]
+          }
+
+  rEcsTask:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub "https://${pBucketCfTemplates}.s3.${AWS::Region}.amazonaws.com/${pBucketCfTemplatesPrefix}/task-template.yaml"
+      Parameters:
+        pCustomerName: !Ref pCustomerName
+        pProjectName: !Ref pProjectName
+        pEnvironment: !Ref pEnvironment
+        pApplication: !Sub "task-${pApplication}"
+        pCostCenter: !Ref pCostCenter
+        pOwner: !Ref pOwner
+        pArea: !Ref pArea
+
+        pExecutionRoleArn: !GetAtt rExecutionRole.Outputs.oIamRoleArn
+        pTaskRoleArn: !GetAtt rTaskRole.Outputs.oIamRoleArn
+        pLogGroupName: !GetAtt rLogGroup.Outputs.oLogGroupName
+        pContainerImage: "public.ecr.aws/nginx/nginx:trixie-perl"
+        pContainerPort: !Ref pApplicationPort
+        pContainerHealthCheckCommands: "CMD-SHELL,nginx -t || exit 1"
+
+  rEcsService:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub "https://${pBucketCfTemplates}.s3.${AWS::Region}.amazonaws.com/${pBucketCfTemplatesPrefix}/service-template.yaml"
+      Parameters:
+        pCustomerName: !Ref pCustomerName
+        pProjectName: !Ref pProjectName
+        pEnvironment: !Ref pEnvironment
+        pApplication: !Sub "task-${pApplication}"
+        pCostCenter: !Ref pCostCenter
+        pOwner: !Ref pOwner
+        pArea: !Ref pArea
+
+        pCluster:
+          Fn::ImportValue:
+            !Sub "${pCustomerName}-${pProjectName}-${pEnvironment}-oEcsClusterName"
+        pTaskDefinitionArn: !GetAtt rEcsTask.Outputs.oTaskArn
+        pContainerName: !GetAtt rEcsTask.Outputs.oTaskContainerName
+        pContainerPort: !Ref pApplicationPort
+        pTargetGroupArn: !GetAtt rTargetGroup.Outputs.oTargetGroupArn
+        pIdSecurityGroups: !GetAtt rSgEcs.Outputs.oSgId
+        pIdSubnets: !Join [",", !Ref pIdSubnets]
+        pAssignPublicIp: "ENABLED" #Temp

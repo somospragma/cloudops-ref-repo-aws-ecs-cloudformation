@@ -1,0 +1,123 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Esta plantilla de CloudFormation despliega la infraestructura base de ECS Fargate, incluyendo Application Load Balancer, Listener, Security Groups y Cluster ECS.
+
+Parameters:
+  pBucketCfTemplates:
+    Description: Nombre del bucket donde se encuentran las plantillas de CloudFormation
+    Type: String
+  pBucketCfTemplatesPrefix:
+    Description: Prefijo del bucket donde se encuentran las plantillas de CloudFormation
+    Type: String
+  pCustomerName:
+    Description: Nombre del cliente
+    Type: String
+  pProjectName:
+    Description: Nombre del proyecto 
+    Type: String
+  pEnvironment:
+    Description: Ambiente del despliegue
+    Type: String
+    AllowedValues: [qa, dev, pdn, prepdn]
+  pApplication:
+    Description: Aplicacion, servicio o funcionalidad del negocio
+    Type: String
+  pCostCenter:
+    Description: Centro de costos que pertenece este recurso
+    Type: String
+  pOwner:
+    Description: Nombre de la persona encargada del proyecto
+    Type: String
+  pArea:
+    Description: Nombre del area
+    Type: String
+  pVpcId:
+    Description: ID de la VPC a la que se asociará el Security Group
+    Type: String
+  pIdSubnets:
+    Description: IDs de las subnets a las que se asociará el Load Balancer (separados por comas)
+    Type: CommaDelimitedList
+  pCidrIpAccess:
+    Description: Rango CIDR que tendra acceso al balanceador
+    Type: String
+
+Resources:
+  rSgAlb:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub "https://${pBucketCfTemplates}.s3.${AWS::Region}.amazonaws.com/${pBucketCfTemplatesPrefix}/sg-template.yaml"
+      Parameters:
+        pCustomerName: !Ref pCustomerName
+        pProjectName: !Ref pProjectName
+        pEnvironment: !Ref pEnvironment
+        pApplication: !Ref pApplication
+        pCostCenter: !Ref pCostCenter
+        pOwner: !Ref pOwner
+        pArea: !Ref pArea
+
+        pVpcId: !Ref pVpcId
+        pSgDescription: !Sub "Security Group para el Application Load Balancer del proyecto ${pProjectName} en el ambiente ${pEnvironment}"
+  rSgAlbIngress:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub "https://${pBucketCfTemplates}.s3.${AWS::Region}.amazonaws.com/${pBucketCfTemplatesPrefix}/sg-ingress-rule-template.yaml"
+      Parameters:
+        pSgId: !GetAtt rSgAlb.Outputs.oSgId
+        pSgRuleDescription: "Regla para permitir el trafico al balanceador"
+        pFromPort: "80"
+        pToPort: "80"
+        pIpProtocol: "tcp"
+        pSourceType: "ipv4"
+        pSourceValue: !Ref pCidrIpAccess
+  rAlb:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub "https://${pBucketCfTemplates}.s3.${AWS::Region}.amazonaws.com/${pBucketCfTemplatesPrefix}/elb-template.yaml"
+      Parameters:
+        pCustomerName: !Ref pCustomerName
+        pProjectName: !Ref pProjectName
+        pEnvironment: !Ref pEnvironment
+        pApplication: !Ref pApplication
+        pCostCenter: !Ref pCostCenter
+        pOwner: !Ref pOwner
+        pArea: !Ref pArea
+
+        pType: "application"
+        pScheme: "internet-facing"
+        pIdSecurityGroups: !GetAtt rSgAlb.Outputs.oSgId
+        pIdSubnets: !Join [",", !Ref pIdSubnets]
+  rAlbListener:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub "https://${pBucketCfTemplates}.s3.${AWS::Region}.amazonaws.com/${pBucketCfTemplatesPrefix}/elb-listener-template.yaml"
+      Parameters:
+        pElbArn: !GetAtt rAlb.Outputs.oElbArn
+
+  rEcsCluster:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub "https://${pBucketCfTemplates}.s3.${AWS::Region}.amazonaws.com/${pBucketCfTemplatesPrefix}/cluster-template.yaml"
+      Parameters:
+        pCustomerName: !Ref pCustomerName
+        pProjectName: !Ref pProjectName
+        pEnvironment: !Ref pEnvironment
+        pApplication: !Ref pApplication
+        pCostCenter: !Ref pCostCenter
+        pOwner: !Ref pOwner
+        pArea: !Ref pArea
+
+Outputs:
+  oAlbListenerArn:
+    Description: ARN del Listener del Application Load Balancer
+    Value: !GetAtt rAlbListener.Outputs.oListenerArn
+    Export:
+      Name: !Sub "${pCustomerName}-${pProjectName}-${pEnvironment}-oAlbListenerArn"
+  oEcsClusterName:
+    Description: Nombre del Cluster ECS
+    Value: !GetAtt rEcsCluster.Outputs.oClusterName
+    Export:
+      Name: !Sub "${pCustomerName}-${pProjectName}-${pEnvironment}-oEcsClusterName"
+  oSgAlbId:
+    Description: Id del security group del alb
+    Value: !GetAtt rSgAlb.Outputs.oSgId
+    Export:
+      Name: !Sub "${pCustomerName}-${pProjectName}-${pEnvironment}-oSgAlbId"

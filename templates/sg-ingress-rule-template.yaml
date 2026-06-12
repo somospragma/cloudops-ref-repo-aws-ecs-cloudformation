@@ -1,0 +1,67 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Esta plantilla de CloudFormation despliega una regla de ingreso para un Security Group.
+
+Parameters:
+  pSgId:
+    Description: ID del Security Group al que se asociará la regla de ingreso
+    Type: String
+  pSgRuleDescription:
+    Description: Descripción de la regla de ingreso del Security Group
+    Type: String
+  pFromPort:
+    Description: Puerto de origen para la regla de ingreso del Security Group
+    Type: String
+  pToPort:
+    Description: Puerto de destino para la regla de ingreso del Security Group
+    Type: String
+  pIpProtocol:
+    Description: Protocolo IP para la regla de ingreso del Security Group (e.g., tcp, udp, icmp)
+    Type: String
+  pSourceType:
+    Description: Tipo de origen permitido
+    Type: String
+    AllowedValues:
+      - ipv4
+      - ipv6
+      - sg
+      - prefix-list
+  pSourceValue:
+    Description: Valor del origen (CIDR, SG ID o Prefix List ID)
+    Type: String
+
+Conditions:
+  cUseIpv4: !Equals [!Ref pSourceType, ipv4]
+  cUseIpv6: !Equals [!Ref pSourceType, ipv6]
+  cUseSg: !Equals [!Ref pSourceType, sg]
+  cUsePrefixList: !Equals [!Ref pSourceType, prefix-list]
+
+Resources:
+  rIngressRuleSg:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref pSgId
+      Description: !Ref pSgRuleDescription
+
+      FromPort: !Ref pFromPort
+      ToPort: !Ref pToPort
+      IpProtocol: !Ref pIpProtocol
+      
+      CidrIp: !If
+        - cUseIpv4
+        - !Ref pSourceValue
+        - !Ref AWS::NoValue
+
+      CidrIpv6: !If
+        - cUseIpv6
+        - !Ref pSourceValue
+        - !Ref AWS::NoValue
+
+      SourceSecurityGroupId: !If
+        - cUseSg
+        - !Ref pSourceValue
+        - !Ref AWS::NoValue
+
+      SourcePrefixListId: !If
+        - cUsePrefixList
+        - !Ref pSourceValue
+        - !Ref AWS::NoValue

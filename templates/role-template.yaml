@@ -1,0 +1,95 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Esta plantilla de CloudFormation despliega un IAM Role.
+
+Parameters:
+  pCustomerName:
+    Description: Nombre del cliente
+    Type: String
+  pProjectName:
+    Description: Nombre del proyecto
+    Type: String
+  pEnvironment:
+    Description: Ambiente del despliegue
+    Type: String
+  pApplication:
+    Description: Aplicación, servicio o funcionalidad del negocio
+    Type: String
+  pCostCenter:
+    Description: Centro de costos que pertenece este recurso
+    Type: String
+  pOwner:
+    Description: Nombre de la persona encargada del proyecto
+    Type: String
+  pArea:
+    Description: Nombre del área
+    Type: String
+  pIamRoleName:
+    Description: Nombre del IAM Role
+    Type: String
+    Default: ""
+  pIamDescription:
+    Description: Descripción del IAM Role
+    Type: String
+  pIamPath:
+    Description: Path del IAM Role
+    Type: String
+    Default: "/"
+  pIamMaxSessionDuration:
+    Description: Duración máxima de sesión del IAM Role
+    Type: Number
+    Default: 3600
+  pIamAssumeRolePolicyDocument:
+    Description: Documento JSON de confianza del IAM Role
+    Type: String
+  pIamManagedPolicyArns:
+    Description: Lista de ARNs de políticas administradas
+    Type: CommaDelimitedList
+    Default: ""
+  pIamPermissionsBoundary:
+    Description: ARN de la Permissions Boundary
+    Type: String
+    Default: ""
+
+Conditions:
+  cHasManagedPolicies: !Not [!Equals [!Select [0, !Ref pIamManagedPolicyArns], ""]]
+  cHasPermissionsBoundary: !Not [!Equals [!Ref pIamPermissionsBoundary, ""]]
+
+Resources:
+  IamRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${pCustomerName}-${pProjectName}-${pEnvironment}-role-${pApplication}"
+      Description: !Ref pIamDescription
+      Path: !Ref pIamPath
+      MaxSessionDuration: !Ref pIamMaxSessionDuration
+      AssumeRolePolicyDocument: !Ref pIamAssumeRolePolicyDocument
+      ManagedPolicyArns: !If 
+        - cHasManagedPolicies
+        - !Ref pIamManagedPolicyArns
+        - !Ref AWS::NoValue
+      PermissionsBoundary: !If
+        - cHasPermissionsBoundary
+        - !Ref pIamPermissionsBoundary
+        - !Ref AWS::NoValue
+      Tags:
+        - Key: environment
+          Value: !Ref pEnvironment
+        - Key: project-name
+          Value: !Ref pProjectName
+        - Key: cost-center
+          Value: !Ref pCostCenter
+        - Key: owner
+          Value: !Ref pOwner
+        - Key: area
+          Value: !Ref pArea
+
+Outputs:
+  oIamRoleArn:
+    Description: The ARN of the IAM role
+    Value: !GetAtt IamRole.Arn
+  oIamRoleName:
+    Description: The name of the IAM role
+    Value: !Ref IamRole
+  oIamRoleId:
+    Description: The ID of the IAM role
+    Value: !GetAtt IamRole.RoleId

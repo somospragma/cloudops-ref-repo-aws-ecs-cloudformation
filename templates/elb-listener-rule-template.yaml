@@ -1,0 +1,37 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Esta plantilla de CloudFormation despliega una regla de Listener para un Application Load Balancer.
+
+Parameters:
+  pListenerArn:
+    Description: ARN del Listener al que se asociará la regla
+    Type: String
+  pPriority:
+    Description: Prioridad de la regla (un número entre 1 y 50000)
+    Type: String
+  pActionType:
+    Description: Tipo de acción a realizar (actualmente solo forward)
+    Type: String
+    Default: forward
+  pTargetGroupArn:
+    Description: ARN del Target Group al que se redirigirá el tráfico (solo aplicable si ActionType es forward)
+    Type: String
+  pPaths:
+    Description: Lista de patrones de ruta para la condición de la regla (por ejemplo, /api/*)
+    Type: CommaDelimitedList
+
+Resources:
+  rListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      ListenerArn: !Ref pListenerArn
+      Priority: !Ref pPriority
+      Actions: 
+        - TargetGroupArn: !Ref pTargetGroupArn
+          Type: !Ref pActionType
+      Conditions: 
+        - Field: path-pattern
+          Values: !Ref pPaths
+Outputs:
+  oRuleArn:
+    Description: ARN de la regla.
+    Value: !GetAtt rListenerRule.RuleArn

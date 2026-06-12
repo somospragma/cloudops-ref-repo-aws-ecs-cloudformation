@@ -1,0 +1,50 @@
+[
+    {
+        "ParameterKey": "pBucketCfTemplates",
+        "ParameterValue": "cloudformation-templates-us-east-1-an"
+    },
+    {
+        "ParameterKey": "pBucketCfTemplatesPrefix",
+        "ParameterValue": "templates/"
+    },
+    {
+        "ParameterKey": "pCustomerName",
+        "ParameterValue": "pragma"
+    },
+    {
+        "ParameterKey": "pProjectName",
+        "ParameterValue": "core"
+    },
+    {
+        "ParameterKey": "pEnvironment",
+        "ParameterValue": "dev"
+    },
+    {
+        "ParameterKey": "pApplication",
+        "ParameterValue": "base"
+    },
+    {
+        "ParameterKey": "pCostCenter",
+        "ParameterValue": "011"
+    },
+    {
+        "ParameterKey": "pOwner",
+        "ParameterValue": "Pragma"
+    },
+    {
+        "ParameterKey": "pApplication",
+        "ParameterValue": "base"
+    },
+    {
+        "ParameterKey": "pVpcId",
+        "ParameterValue": "vpc-0b34b940c4c723ccd"
+    },
+    {
+        "ParameterKey": "pIdSubnets",
+        "ParameterValue": "subnet-0699d79f0a5c517f3,subnet-0162d9031aea303e7"
+    },
+    {
+        "ParameterKey": "pCidrIpAccess",
+        "ParameterValue": "0.0.0.0/0"
+    }
+]

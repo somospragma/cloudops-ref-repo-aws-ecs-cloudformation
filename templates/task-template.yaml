@@ -1,0 +1,156 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Esta plantilla de CloudFormation despliega una definición de tarea de ECS.
+
+Parameters:
+  pCustomerName:
+    Description: Nombre del cliente
+    Type: String
+  pProjectName:
+    Description: Nombre del proyecto 
+    Type: String
+  pEnvironment:
+    Description: Ambiente del despliegue
+    Type: String
+    AllowedValues: [qa, dev, pdn, prepdn]
+  pApplication:
+    Description: Aplicacion, servicio o funcionalidad del negocio
+    Type: String
+  pCostCenter:
+    Description: Centro de costos que pertenece este recurso
+    Type: String
+  pOwner:
+    Description: Nombre de la persona encargada del proyecto
+    Type: String
+  pArea:
+    Description: Nombre del area
+    Type: String
+  pExecutionRoleArn:
+    Description: ARN del rol de ejecución para la tarea
+    Type: String
+  pTaskRoleArn:
+    Description: ARN del rol de tarea para la tarea
+    Type: String
+  pLogGroupName:
+    Description: Nombre del grupo de logs de CloudWatch para la tarea
+    Type: String
+  pContainerImage:
+    Description: Imagen del contenedor para la definición de la tarea
+    Type: String
+  pContainerPort:
+    Description: Puerto del contenedor para la definición de la tarea
+    Type: String
+  pContainerHealthCheckCommands:
+    Description: Comandos para la verificación de estado del contenedor (por ejemplo, ["CMD-SHELL", "curl -f http://localhost/health || exit 1"])
+    Type: CommaDelimitedList
+  pFamilyName:
+    Description: Nombre de la familia de la tarea
+    Type: String
+    Default: ""
+  pNetworkMode:
+    Description: Modo de red para la tarea (awsvpc, host o bridge)
+    Type: String
+    Default: "awsvpc"
+  pCpu:
+    Description: Unidades de CPU para la tarea (por ejemplo, 256, 512, 1024)
+    Type: String
+    Default: "256"
+  pMemory:
+    Description: Memoria para la tarea (por ejemplo, 512, 1024, 2048)
+    Type: String
+    Default: "512"
+  pCpuArchitecture:
+    Description: Arquitectura de CPU para la tarea (X86_64 o ARM64)
+    Type: String
+    Default: "X86_64"
+  pOperatingSystemFamily:
+    Description: Familia del sistema operativo para la tarea (LINUX o WINDOWS)
+    Type: String
+    Default: "LINUX"
+  pRequiresCompatibilities:
+    Description: Lista de requisitos de compatibilidad para la tarea (por ejemplo, FARGATE, EC2)
+    Type: CommaDelimitedList
+    Default: "FARGATE"
+  pContainerEssential:
+    Description: Indica si el contenedor es esencial para la tarea (true o false)
+    Type: String
+    AllowedValues:
+      - "true"
+      - "false"
+    Default: "true"
+  pContainerPortProtocol:
+    Description: Protocolo del puerto del contenedor (tcp o udp)
+    Type: String
+    Default: "tcp"
+  pContainerHealthCheckStartPeriod:
+    Description: Período de inicio para la verificación de estado del contenedor (en segundos)
+    Type: String
+    Default: "30"
+  pContainerHealthCheckInterval:
+    Description: Intervalo para la verificación de estado del contenedor (en segundos)
+    Type: String
+    Default: "30"
+  pContainerHealthCheckTimeout:
+    Description: Tiempo de espera para la verificación de estado del contenedor (en segundos)
+    Type: String
+    Default: "30"
+  pContainerHealthCheckRetries:
+    Description: Número de reintentos para la verificación de estado del contenedor
+    Type: String
+    Default: "3"
+  
+Resources:
+  rTask:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub "${pCustomerName}-${pProjectName}-${pEnvironment}-task-${pApplication}"
+      NetworkMode: !Ref pNetworkMode
+      Cpu: !Ref pCpu
+      Memory: !Ref pMemory
+      RequiresCompatibilities: !Ref pRequiresCompatibilities
+      ExecutionRoleArn: !Ref pExecutionRoleArn
+      TaskRoleArn: !Ref pTaskRoleArn
+      ContainerDefinitions:
+        - Name: !Sub "${pCustomerName}-${pProjectName}-${pEnvironment}-ctr-${pApplication}"
+          Image: !Ref pContainerImage
+          Essential: !Ref pContainerEssential
+
+          PortMappings:
+            - ContainerPort: !Ref pContainerPort
+              HostPort: !Ref pContainerPort
+              Name: !Sub "pm-${pApplication}"
+              Protocol: !Ref pContainerPortProtocol
+
+          HealthCheck:
+            Command: !Ref pContainerHealthCheckCommands
+            StartPeriod: !Ref pContainerHealthCheckStartPeriod
+            Interval: !Ref pContainerHealthCheckInterval
+            Timeout: !Ref pContainerHealthCheckTimeout
+            Retries: !Ref pContainerHealthCheckRetries
+
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref pLogGroupName
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: ecs
+      RuntimePlatform: 
+        CpuArchitecture: !Ref pCpuArchitecture
+        OperatingSystemFamily: !Ref pOperatingSystemFamily
+      Tags: 
+        - Key: environment
+          Value: !Ref pEnvironment
+        - Key: project-name
+          Value: !Ref pProjectName
+        - Key: cost-center
+          Value: !Ref pCostCenter
+        - Key: owner
+          Value: !Ref pOwner
+        - Key: area
+          Value: !Ref pArea
+Outputs:
+  oTaskContainerName:
+    Description: Nombre del contenedor en la tarea
+    Value: !Sub "${pCustomerName}-${pProjectName}-${pEnvironment}-ctr-${pApplication}"
+  oTaskArn:
+    Description: ARN de la tarea
+    Value: !GetAtt rTask.TaskDefinitionArn

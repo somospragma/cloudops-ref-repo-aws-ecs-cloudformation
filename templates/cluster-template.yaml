@@ -1,0 +1,85 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Esta plantilla de CloudFormation despliega un clúster de Amazon ECS.
+
+Parameters:
+  pCustomerName:
+    Description: Nombre del cliente
+    Type: String
+  pProjectName:
+    Description: Nombre del proyecto 
+    Type: String
+  pEnvironment:
+    Description: Ambiente del despliegue
+    Type: String
+    AllowedValues: [qa, dev, pdn, prepdn]
+  pApplication:
+    Description: Aplicacion, servicio o funcionalidad del negocio
+    Type: String
+  pCostCenter:
+    Description: Centro de costos que pertenece este recurso
+    Type: String
+  pOwner:
+    Description: Nombre de la persona encargada del proyecto
+    Type: String
+  pArea:
+    Description: Nombre del area
+    Type: String
+  pWeightFargate:
+    Description: Peso relativo para Fargate cuando se usa junto con Fargate Spot (solo se aplica si pUseFargateSpot es "true")
+    Type: String
+    Default: 1
+  pUseFargateSpot:
+    Description: Indica si se debe usar Fargate Spot como proveedor de capacidad adicional
+    Type: String
+    AllowedValues:
+      - "true"
+      - "false"
+    Default: "false"
+  pWeightFargateSpot:
+    Description: Peso relativo para Fargate Spot cuando se usa junto con Fargate (solo se aplica si pUseFargateSpot es "true")
+    Type: String
+    Default: 1
+  
+Conditions:
+  cUseFargateSpot: !Equals [!Ref pUseFargateSpot, "true"]
+
+Resources:
+  rCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Sub "${pCustomerName}-${pProjectName}-${pEnvironment}-cluster-${pApplication}"
+      Tags: 
+        - Key: environment
+          Value: !Ref pEnvironment
+        - Key: project-name
+          Value: !Ref pProjectName
+        - Key: cost-center
+          Value: !Ref pCostCenter
+        - Key: owner
+          Value: !Ref pOwner
+        - Key: area
+          Value: !Ref pArea
+  rClusterCapacityProvider:
+    Type: AWS::ECS::ClusterCapacityProviderAssociations
+    Properties:
+      Cluster: !Ref rCluster
+      CapacityProviders:
+        - FARGATE
+        - !If [cUseFargateSpot, FARGATE_SPOT, !Ref AWS::NoValue]
+      DefaultCapacityProviderStrategy:
+        - CapacityProvider: FARGATE
+          Base: 1
+          Weight: !Ref pWeightFargate
+
+        - !If
+          - cUseFargateSpot
+          - CapacityProvider: FARGATE_SPOT
+            Weight: !Ref pWeightFargateSpot
+          - !Ref AWS::NoValue
+Outputs:
+  oClusterName:
+    Description: Nombre del cluster de ECS
+    Value: !Ref rCluster
+  oClusterArn:
+    Description: ARN del clúster de ECS
+    Value: !GetAtt rCluster.Arn

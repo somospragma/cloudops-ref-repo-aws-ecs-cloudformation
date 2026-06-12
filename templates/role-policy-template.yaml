@@ -1,0 +1,54 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Esta Plantilla para crear una política IAM asociada a un rol.
+
+Parameters:
+  pCustomerName:
+    Description: Nombre del cliente
+    Type: String
+  pProjectName:
+    Description: Nombre del proyecto 
+    Type: String
+  pEnvironment:
+    Description: Ambiente del despliegue
+    Type: String
+    AllowedValues: [qa, dev, pdn, prepdn]
+  pApplication:
+    Description: Aplicacion, servicio o funcionalidad del negocio
+    Type: String
+  pRoleName:
+    Description: Nombre del IAM Role al que se asociará la política
+    Type: String
+  pPolicyName:
+    Description: Nombre de la política IAM
+    Type: String
+    Default: ""
+  pPolicyEffect:
+    Description: Efecto de la política IAM
+    Type: String
+    AllowedValues:
+      - Allow
+      - Deny
+  pPolicyAction:
+    Description: Lista de acciones IAM
+    Type: CommaDelimitedList
+  pPolicyResource:
+    Description: Lista de recursos IAM
+    Type: CommaDelimitedList
+
+Resources:
+  rIamRolePolicy:
+    Type: AWS::IAM::RolePolicy
+    Properties:
+      PolicyName: !Sub "${pCustomerName}-${pProjectName}-${pEnvironment}-policy-${pApplication}"
+      RoleName: !Ref pRoleName
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: !Ref pPolicyEffect
+            Action: !Ref pPolicyAction
+            Resource: !Ref pPolicyResource
+
+Outputs:
+  oPolicyName:
+    Description: El nombre de la política IAM creada
+    Value: !Ref rIamRolePolicy
